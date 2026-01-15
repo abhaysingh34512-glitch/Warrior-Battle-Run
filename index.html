@@ -1,122 +1,147 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Super Adventure Run</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <style>
-        body { margin: 0; background: #5c94fc; overflow: hidden; font-family: 'Arial', sans-serif; touch-action: none; }
-        #gui { position: absolute; top: 10px; left: 10px; color: white; font-size: 20px; font-weight: bold; text-shadow: 2px 2px #000; }
-        #controls { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: space-around; pointer-events: none; }
-        .btn { width: 70px; height: 70px; background: rgba(255,255,255,0.3); border-radius: 50%; pointer-events: auto; display: flex; justify-content: center; align-items: center; color: white; font-size: 30px; border: 2px solid white; }
-    </style>
+<title>High Graphics Car Racing Game</title>
+<style>
+body { margin:0; font-family:Arial; background:black; color:white; text-align:center; }
+canvas { background:#555; display:none; margin:auto; }
+button { padding:12px 20px; margin:10px; font-size:18px; }
+#menu, #settings, #mapSelect { display:block; }
+</style>
 </head>
 <body>
-    <div id="gui">COINS: <span id="score">0</span></div>
-    <div id="controls">
-        <div class="btn" id="left">⬅️</div>
-        <div class="btn" id="jump">⬆️</div>
-        <div class="btn" id="right">➡️</div>
-    </div>
-    <canvas id="gameCanvas"></canvas>
 
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+<h1>🏎️ Ultimate Car Racing</h1>
 
-        let score = 0;
-        const gravity = 0.8;
-        
-        const player = {
-            x: 50, y: canvas.height - 150,
-            w: 40, h: 40,
-            dy: 0, speed: 5,
-            jumpForce: 15, grounded: false,
-            color: '#ff4757'
-        };
+<div id="menu">
+  <button onclick="startGame()">Start Game</button>
+  <button onclick="openMap()">Choose Place</button>
+  <button onclick="openSettings()">Settings</button>
+</div>
 
-        const platforms = [
-            {x: 0, y: canvas.height - 50, w: 2000, h: 50}, // Zameen
-            {x: 300, y: canvas.height - 150, w: 100, h: 20},
-            {x: 500, y: canvas.height - 250, w: 150, h: 20},
-            {x: 750, y: canvas.height - 180, w: 100, h: 20}
-        ];
+<div id="mapSelect" style="display:none;">
+  <h2>Select Track</h2>
+  <button onclick="selectMap(1)">City</button>
+  <button onclick="selectMap(2)">Desert</button>
+  <button onclick="backToMenu()">Back</button>
+</div>
 
-        const coins = [
-            {x: 330, y: canvas.height - 190, collected: false},
-            {x: 550, y: canvas.height - 290, collected: false},
-            {x: 800, y: canvas.height - 220, collected: false}
-        ];
+<div id="settings" style="display:none;">
+  <h2>Settings</h2>
+  <p>Graphics: High</p>
+  <p>Sound: On</p>
+  <button onclick="backToMenu()">Back</button>
+</div>
 
-        let keys = { left: false, right: false };
+<canvas id="game" width="360" height="600"></canvas>
+<h2 id="info"></h2>
 
-        // Controls setup
-        document.getElementById('left').ontouchstart = () => keys.left = true;
-        document.getElementById('left').ontouchend = () => keys.left = false;
-        document.getElementById('right').ontouchstart = () => keys.right = true;
-        document.getElementById('right').ontouchend = () => keys.right = false;
-        document.getElementById('jump').ontouchstart = () => { if(player.grounded) player.dy = -player.jumpForce; };
+<script>
+let canvas = document.getElementById("game");
+let ctx = canvas.getContext("2d");
 
-        function update() {
-            // Movement
-            if (keys.left) player.x -= player.speed;
-            if (keys.right) player.x += player.speed;
+let car = { x:160, y:500, w:40, h:80 };
+let enemy = { x:160, y:-100, w:40, h:80 };
+let score = 0;
+let level = 1;
+let speed = 4;
+let gameRunning = false;
+let map = 1;
 
-            // Gravity
-            player.dy += gravity;
-            player.y += player.dy;
-            player.grounded = false;
+function openMap(){
+  document.getElementById("menu").style.display="none";
+  document.getElementById("mapSelect").style.display="block";
+}
 
-            // Platform Collision
-            platforms.forEach(p => {
-                if (player.x < p.x + p.w && player.x + player.w > p.x &&
-                    player.y < p.y + p.h && player.y + player.h > p.y) {
-                    if (player.dy > 0) {
-                        player.dy = 0;
-                        player.y = p.y - player.h;
-                        player.grounded = true;
-                    }
-                }
-            });
+function openSettings(){
+  document.getElementById("menu").style.display="none";
+  document.getElementById("settings").style.display="block";
+}
 
-            // Coin Collection
-            coins.forEach(c => {
-                if (!c.collected && player.x < c.x + 20 && player.x + player.w > c.x &&
-                    player.y < c.y + 20 && player.y + player.h > c.y) {
-                    c.collected = true;
-                    score++;
-                    document.getElementById('score').innerText = score;
-                }
-            });
+function backToMenu(){
+  document.getElementById("menu").style.display="block";
+  document.getElementById("settings").style.display="none";
+  document.getElementById("mapSelect").style.display="none";
+}
 
-            // Camera follow (Simple)
-            ctx.setTransform(1,0,0,1, -player.x + 50, 0);
-        }
+function selectMap(m){
+  map = m;
+  alert("Map Selected!");
+  backToMenu();
+}
 
-        function draw() {
-            ctx.clearRect(player.x - 100, 0, canvas.width + 1000, canvas.height);
+function startGame(){
+  document.getElementById("menu").style.display="none";
+  canvas.style.display="block";
+  score = 0;
+  level = 1;
+  speed = 4;
+  enemy.y = -100;
+  gameRunning = true;
+  gameLoop();
+}
 
-            // Zameen aur Platforms
-            ctx.fillStyle = '#2ed573';
-            platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
+document.addEventListener("keydown", function(e){
+  if(e.key=="ArrowLeft" && car.x>0) car.x -= 20;
+  if(e.key=="ArrowRight" && car.x<320) car.x += 20;
+});
 
-            // Coins
-            ctx.fillStyle = '#eccc68';
-            coins.forEach(c => { if(!c.collected) ctx.beginPath(), ctx.arc(c.x, c.y, 10, 0, Math.PI*2), ctx.fill(); });
+function drawRoad(){
+  if(map==1) ctx.fillStyle="#444";
+  if(map==2) ctx.fillStyle="#C2B280";
+  ctx.fillRect(0,0,360,600);
+}
 
-            // Player (Mario type character)
-            ctx.fillStyle = player.color;
-            ctx.fillRect(player.x, player.y, player.w, player.h);
-        }
+function drawCar(){
+  ctx.fillStyle="red";
+  ctx.fillRect(car.x, car.y, car.w, car.h);
+}
 
-        function loop() {
-            update();
-            draw();
-            requestAnimationFrame(loop);
-        }
+function drawEnemy(){
+  ctx.fillStyle="yellow";
+  ctx.fillRect(enemy.x, enemy.y, enemy.w, enemy.h);
+}
 
-        loop();
-    </script>
+function gameLoop(){
+  if(!gameRunning) return;
+
+  drawRoad();
+  drawCar();
+  drawEnemy();
+
+  enemy.y += speed;
+
+  if(enemy.y > 600){
+    enemy.y = -100;
+    enemy.x = Math.random()*300;
+    score++;
+    if(score % 5 == 0){
+      level++;
+      speed += 1;
+    }
+  }
+
+  if(
+    car.x < enemy.x + enemy.w &&
+    car.x + car.w > enemy.x &&
+    car.y < enemy.y + enemy.h &&
+    car.y + car.h > enemy.y
+  ){
+    gameOver();
+    return;
+  }
+
+  document.getElementById("info").innerText = "Score: " + score + " | Level: " + level;
+
+  requestAnimationFrame(gameLoop);
+}
+
+function gameOver(){
+  gameRunning = false;
+  alert("Game Over!\nScore: " + score + "\nLevel: " + level);
+  backToMenu();
+}
+</script>
+
 </body>
 </html>
