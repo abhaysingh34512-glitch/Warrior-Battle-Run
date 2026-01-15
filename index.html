@@ -1,136 +1,122 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>3D Super Car Racer</title>
+    <title>Super Adventure Run</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        body { margin: 0; overflow: hidden; background: #333; font-family: sans-serif; }
-        #gameGui { position: absolute; top: 20px; width: 100%; text-align: center; color: white; font-size: 24px; font-weight: bold; text-shadow: 2px 2px #000; pointer-events: none; }
-        #startMenu { position: absolute; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
-        button { padding: 15px 40px; font-size: 20px; background: #f1c40f; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        body { margin: 0; background: #5c94fc; overflow: hidden; font-family: 'Arial', sans-serif; touch-action: none; }
+        #gui { position: absolute; top: 10px; left: 10px; color: white; font-size: 20px; font-weight: bold; text-shadow: 2px 2px #000; }
+        #controls { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: space-around; pointer-events: none; }
+        .btn { width: 70px; height: 70px; background: rgba(255,255,255,0.3); border-radius: 50%; pointer-events: auto; display: flex; justify-content: center; align-items: center; color: white; font-size: 30px; border: 2px solid white; }
     </style>
 </head>
 <body>
-    <div id="startMenu">
-        <h1 style="color: white;">3D CAR RACER 🏎️</h1>
-        <button onclick="startRacing()">RACE START!</button>
+    <div id="gui">COINS: <span id="score">0</span></div>
+    <div id="controls">
+        <div class="btn" id="left">⬅️</div>
+        <div class="btn" id="jump">⬆️</div>
+        <div class="btn" id="right">➡️</div>
     </div>
-    <div id="gameGui">Score: <span id="score">0</span></div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <canvas id="gameCanvas"></canvas>
 
     <script>
-        let scene, camera, renderer, car, obstacles = [], isPlaying = false;
-        let score = 0, speed = 0.5, lane = 0;
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
 
-        function startRacing() {
-            document.getElementById('startMenu').style.display = 'none';
-            isPlaying = true;
-            init();
-        }
+        let score = 0;
+        const gravity = 0.8;
+        
+        const player = {
+            x: 50, y: canvas.height - 150,
+            w: 40, h: 40,
+            dy: 0, speed: 5,
+            jumpForce: 15, grounded: false,
+            color: '#ff4757'
+        };
 
-        function createCar(color, isPlayer = false) {
-            const carGroup = new THREE.Group();
-            // Body
-            const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 2.5), new THREE.MeshPhongMaterial({color: color}));
-            body.position.y = 0.5;
-            carGroup.add(body);
-            // Cabin
-            const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 1.2), new THREE.MeshPhongMaterial({color: 0x333333}));
-            cabin.position.set(0, 0.9, -0.2);
-            carGroup.add(cabin);
-            // Wheels
-            const wheelGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 16);
-            const wheelMat = new THREE.MeshPhongMaterial({color: 0x111111});
-            const positions = [[-0.7,0.3,0.8], [0.7,0.3,0.8], [-0.7,0.3,-0.8], [0.7,0.3,-0.8]];
-            positions.forEach(p => {
-                const w = new THREE.Mesh(wheelGeo, wheelMat);
-                w.rotation.z = Math.PI/2;
-                w.position.set(p[0], p[1], p[2]);
-                carGroup.add(w);
-            });
-            return carGroup;
-        }
+        const platforms = [
+            {x: 0, y: canvas.height - 50, w: 2000, h: 50}, // Zameen
+            {x: 300, y: canvas.height - 150, w: 100, h: 20},
+            {x: 500, y: canvas.height - 250, w: 150, h: 20},
+            {x: 750, y: canvas.height - 180, w: 100, h: 20}
+        ];
 
-        function init() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x22aaee); // Sky Blue
-            scene.fog = new THREE.Fog(0x22aaee, 10, 50);
+        const coins = [
+            {x: 330, y: canvas.height - 190, collected: false},
+            {x: 550, y: canvas.height - 290, collected: false},
+            {x: 800, y: canvas.height - 220, collected: false}
+        ];
 
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            document.body.appendChild(renderer.domElement);
+        let keys = { left: false, right: false };
 
-            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-            const sun = new THREE.DirectionalLight(0xffffff, 1);
-            sun.position.set(5, 10, 5);
-            scene.add(sun);
+        // Controls setup
+        document.getElementById('left').ontouchstart = () => keys.left = true;
+        document.getElementById('left').ontouchend = () => keys.left = false;
+        document.getElementById('right').ontouchstart = () => keys.right = true;
+        document.getElementById('right').ontouchend = () => keys.right = false;
+        document.getElementById('jump').ontouchstart = () => { if(player.grounded) player.dy = -player.jumpForce; };
 
-            // Road with lanes
-            const roadGeo = new THREE.PlaneGeometry(10, 1000);
-            const roadMat = new THREE.MeshPhongMaterial({color: 0x444444});
-            const road = new THREE.Mesh(roadGeo, roadMat);
-            road.rotation.x = -Math.PI / 2;
-            scene.add(road);
+        function update() {
+            // Movement
+            if (keys.left) player.x -= player.speed;
+            if (keys.right) player.x += player.speed;
 
-            // Player Car
-            car = createCar(0xff0000, true);
-            scene.add(car);
+            // Gravity
+            player.dy += gravity;
+            player.y += player.dy;
+            player.grounded = false;
 
-            camera.position.set(0, 4, 8);
-            camera.lookAt(0, 0, 0);
-
-            spawnObstacles();
-            animate();
-        }
-
-        function spawnObstacles() {
-            setInterval(() => {
-                if(!isPlaying) return;
-                const obs = createCar(Math.random() * 0xffffff);
-                obs.position.set((Math.random() - 0.5) * 7, 0, -50);
-                scene.add(obs);
-                obstacles.push(obs);
-            }, 1000);
-        }
-
-        function animate() {
-            if(!isPlaying) return;
-            requestAnimationFrame(animate);
-
-            // Speed up
-            speed += 0.0001;
-            score += 1;
-            document.getElementById('score').innerText = Math.floor(score/10);
-
-            // Obstacle logic
-            obstacles.forEach((o, i) => {
-                o.position.z += speed + 0.2;
-                if(o.position.z > 10) {
-                    scene.remove(o);
-                    obstacles.splice(i, 1);
-                }
-                // Collision
-                if(car.position.distanceTo(o.position) < 1.5) {
-                    isPlaying = false;
-                    alert("CRASH! Game Over. Final Score: " + Math.floor(score/10));
-                    location.reload();
+            // Platform Collision
+            platforms.forEach(p => {
+                if (player.x < p.x + p.w && player.x + player.w > p.x &&
+                    player.y < p.y + p.h && player.y + player.h > p.y) {
+                    if (player.dy > 0) {
+                        player.dy = 0;
+                        player.y = p.y - player.h;
+                        player.grounded = true;
+                    }
                 }
             });
 
-            renderer.render(scene, camera);
+            // Coin Collection
+            coins.forEach(c => {
+                if (!c.collected && player.x < c.x + 20 && player.x + player.w > c.x &&
+                    player.y < c.y + 20 && player.y + player.h > c.y) {
+                    c.collected = true;
+                    score++;
+                    document.getElementById('score').innerText = score;
+                }
+            });
+
+            // Camera follow (Simple)
+            ctx.setTransform(1,0,0,1, -player.x + 50, 0);
         }
 
-        // Steering
-        window.addEventListener('touchmove', e => {
-            let x = (e.touches[0].clientX / window.innerWidth) * 2 - 1;
-            car.position.x = x * 4;
-        });
-        window.addEventListener('mousemove', e => {
-            let x = (e.clientX / window.innerWidth) * 2 - 1;
-            car.position.x = x * 4;
-        });
+        function draw() {
+            ctx.clearRect(player.x - 100, 0, canvas.width + 1000, canvas.height);
+
+            // Zameen aur Platforms
+            ctx.fillStyle = '#2ed573';
+            platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
+
+            // Coins
+            ctx.fillStyle = '#eccc68';
+            coins.forEach(c => { if(!c.collected) ctx.beginPath(), ctx.arc(c.x, c.y, 10, 0, Math.PI*2), ctx.fill(); });
+
+            // Player (Mario type character)
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.w, player.h);
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        loop();
     </script>
 </body>
 </html>
