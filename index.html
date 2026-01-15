@@ -1,65 +1,137 @@
- html>
+<!DOCTYPE html>
 <html>
 <head>
-    <title>Warrior Battle Run</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warrior Army Run 3D</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: sans-serif; touch-action: none; }
-        #ui { position: absolute; top: 10px; width: 100%; text-align: center; color: white; font-size: 24px; text-shadow: 2px 2px #000; z-index: 5; }
-        #menu { position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: yellow; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10; }
-        button { padding: 15px 30px; font-size: 20px; background: #28a745; color: white; border: none; border-radius: 10px; }
-        canvas { display: block; }
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Arial', sans-serif; }
+        #ui { position: absolute; top: 20px; width: 100%; text-align: center; color: white; font-size: 32px; font-weight: bold; text-shadow: 2px 2px 5px #000; pointer-events: none; z-index: 10; }
+        #startBtn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 20px 40px; background: #ff4757; color: white; border: none; border-radius: 50px; font-size: 24px; cursor: pointer; z-index: 100; }
     </style>
 </head>
 <body>
-    <div id="menu">
-        <h1>WARRIOR BATTLE RUN ⚔️</h1>
-        <p style="color:white">Sankhya badhao, Dushman ko harao!</p>
-        <button onclick="start()">BATTLE SHURU</button>
-    </div>
-    <div id="ui">Army: <span id="val">10</span></div>
-    <canvas id="canvas"></canvas>
+    <button id="startBtn" onclick="startGame()">START BATTLE ⚔️</button>
+    <div id="ui">ARMY: <span id="score">1</span></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        let count = 10, px, active = false, objs = [];
+        let scene, camera, renderer, player, army = [], gates = [], enemies = [], isStarted = false;
+        let score = 1, moveX = 0;
 
-        function start() {
-            document.getElementById('menu').style.display = 'none';
-            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-            px = canvas.width / 2;
-            objs = [
-                {x: 50, y: -200, t: 'g', v: 2, txt: 'X2', c: 'lime'},
-                {x: 200, y: -600, t: 'v', v: 5, txt: '-5', c: 'red'},
-                {x: 120, y: -1000, t: 'p', txt: 'SWORD', c: 'yellow'}
-            ];
-            active = true; loop();
+        function startGame() {
+            document.getElementById('startBtn').style.display = 'none';
+            isStarted = true;
+            init();
         }
 
-        function loop() {
-            if(!active) return;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#444'; ctx.fillRect(canvas.width/2-120, 0, 240, canvas.height);
-            
-            ctx.fillStyle = '#007bff'; ctx.beginPath(); ctx.arc(px, canvas.height-100, 30, 0, 7); ctx.fill();
-            ctx.fillStyle = 'white'; ctx.fillText(count, px-10, canvas.height-95);
+        function createHumanoid(color) {
+            const group = new THREE.Group();
+            // Body
+            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.6, 4, 8), new THREE.MeshStandardMaterial({color: color}));
+            body.position.y = 0.8;
+            group.add(body);
+            // Head
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), new THREE.MeshStandardMaterial({color: color}));
+            head.position.y = 1.4;
+            group.add(head);
+            // Arms
+            const armGeo = new THREE.CapsuleGeometry(0.08, 0.4, 4, 8);
+            const armL = new THREE.Mesh(armGeo, new THREE.MeshStandardMaterial({color: color}));
+            armL.position.set(-0.4, 1.1, 0);
+            group.add(armL);
+            const armR = armL.clone();
+            armR.position.x = 0.4;
+            group.add(armR);
+            return group;
+        }
 
-            objs.forEach(o => {
-                o.y += 5;
-                ctx.fillStyle = o.c; ctx.fillRect(o.x, o.y, 90, 60);
-                ctx.fillStyle = 'black'; ctx.font = "bold 20px Arial"; ctx.fillText(o.txt, o.x+10, o.y+40);
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 20, 100);
 
-                if(o.y > canvas.height-140 && o.y < canvas.height-60 && Math.abs(px - (o.x+45)) < 60) {
-                    if(o.t == 'g') count *= o.v; else if(o.t == 'v') count -= o.v;
-                    o.y = -800; document.getElementById('val').innerText = count;
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(5, 10, 7);
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0x404040));
+
+            // Road
+            const road = new THREE.Mesh(new THREE.PlaneGeometry(10, 1000), new THREE.MeshStandardMaterial({color: 0x444444}));
+            road.rotation.x = -Math.PI / 2;
+            scene.add(road);
+
+            // Real Player Character
+            player = createHumanoid(0x0000ff); // Blue Warrior
+            scene.add(player);
+
+            // Add Enemies (Villains)
+            for(let i = 1; i < 15; i++) {
+                createEnemy(-40 * i);
+                createGate(-25 * i);
+            }
+
+            camera.position.set(0, 6, 10);
+            animate();
+        }
+
+        function createEnemy(z) {
+            const villain = createHumanoid(0xff0000); // Red Villain
+            villain.position.set(Math.random() * 6 - 3, 0, z);
+            scene.add(villain);
+            enemies.push(villain);
+        }
+
+        function createGate(z) {
+            const gateGeo = new THREE.BoxGeometry(4, 3, 0.2);
+            const gateMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
+            const gate = new THREE.Mesh(gateGeo, gateMat);
+            gate.position.set(Math.random() * 4 - 2, 1.5, z);
+            gate.userData = { value: 2 };
+            scene.add(gate);
+            gates.push(gate);
+        }
+
+        function animate() {
+            if (!isStarted) return;
+            requestAnimationFrame(animate);
+
+            player.position.z -= 0.25;
+            player.position.x += (moveX - player.position.x) * 0.1;
+            camera.position.z = player.position.z + 10;
+            camera.lookAt(player.position.x, 1, player.position.z - 5);
+
+            // Logic for Gates
+            gates.forEach((gate, i) => {
+                if (player.position.distanceTo(gate.position) < 2) {
+                    score *= gate.userData.value;
+                    document.getElementById('score').innerText = score;
+                    scene.remove(gate);
+                    gates.splice(i, 1);
                 }
-                if(o.y > canvas.height) o.y = -800;
             });
 
-            if(count <= 0) { alert("Game Over!"); location.reload(); }
-            requestAnimationFrame(loop);
+            // Logic for Villains
+            enemies.forEach((en, i) => {
+                if (player.position.distanceTo(en.position) < 1.5) {
+                    score -= 5; // Dushman se takrane par army kam hogi
+                    document.getElementById('score').innerText = Math.max(0, score);
+                    scene.remove(en);
+                    enemies.splice(i, 1);
+                }
+            });
+
+            if(score <= 0) { alert("Game Over! Villains Won!"); location.reload(); }
+            renderer.render(scene, camera);
         }
 
-        window.addEventListener('touchmove', e => { px = e.touches[0].clientX; });
-        window.addEventListener('mousemove', e => { px
+        window.addEventListener('touchmove', e => moveX = ((e.touches[0].clientX/window.innerWidth)*2-1)*4);
+        window.addEventListener('mousemove', e => moveX = ((e.clientX/window.innerWidth)*2-1)*4);
+    </script>
+</body>
+</html>
